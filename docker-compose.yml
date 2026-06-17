@@ -1,0 +1,58 @@
+# =============================================================================
+# Football Watcher — container STACK
+# -----------------------------------------------------------------------------
+#   web        : the React UI + Node server. Tiny image, built from THIS source
+#                (or pulled from Docker Hub). Proxies /api/translate -> translator.
+#   translator : NorT5 NO->EN model running in PyTorch. Big image, pulled from
+#                Docker Hub (rarely changes). Internal-only — not exposed to LAN.
+#
+# Run:  docker compose up -d         (builds web locally, pulls translator)
+#       open  http://<web-ip>        (web has its own IP on br1)
+#
+# On Unraid: use the Docker Compose Manager plugin and paste this file.
+# =============================================================================
+services:
+  web:
+    # Built LOCALLY from this repo's source (clone from GitHub, then build).
+    # The web image is tiny and changes often, so it's built on the box rather
+    # than pulled from a registry. `image:` just names the local build.
+    build: .
+    image: football-watcher-web:local
+    container_name: football-watcher-web
+    restart: unless-stopped
+    environment:
+      - PORT=80
+      - TRANSLATOR_URL=http://translator:8788
+      - LOG_LEVEL=info
+    # Unraid UI integration: these labels give the container a WebUI link + icon
+    # in the Docker tab, exactly like an XML template would. The compose file IS
+    # the template — no separate XML needed.
+    labels:
+      - net.unraid.docker.managed=composeman
+      - net.unraid.docker.webui=http://[IP]:[PORT:80]/
+      - net.unraid.docker.icon=https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png
+    networks:
+      # Own IP on the 10GbE custom network (set your free IP below).
+      br1:
+        ipv4_address: 192.168.1.123
+      internal: {}        # so it can reach the translator by name
+    depends_on:
+      - translator
+
+  translator:
+    image: talentlesshack/nort5-translator:latest
+    container_name: football-watcher-translator
+    restart: unless-stopped
+    environment:
+      - TRANSLATOR_PORT=8788
+    networks:
+      - internal          # internal-only: never exposed to the LAN
+
+networks:
+  # Your existing Unraid macvlan network (br1). Marked external so compose uses
+  # the one Unraid already manages instead of creating a new one.
+  br1:
+    external: true
+  # Private bridge just for web <-> translator traffic.
+  internal:
+    driver: bridge

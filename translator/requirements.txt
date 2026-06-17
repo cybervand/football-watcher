@@ -1,0 +1,12 @@
+# Pinned stack that makes ltg/nort5-base-en-no-translation's custom model code
+# (modeling_nort5.py) load and run. These pins are REQUIRED, not cosmetic:
+#  - transformers 5.x breaks the custom code (missing all_tied_weights_keys)
+#  - tokenizers must be <0.21 to match transformers 4.46.x
+#  - torch CPU build keeps the image smaller (no CUDA)
+# Verified working on Python 3.12.
+torch==2.4.1
+transformers==4.46.3
+tokenizers>=0.20,<0.21
+sentencepiece==0.2.0
+huggingface-hub<0.27
+numpy<2

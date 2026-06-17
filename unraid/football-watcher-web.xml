@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<!--
+  Football Watcher — WEB container (React UI + Node server).
+  Add via Docker tab AFTER the translator (so the 'football-watcher' network
+  exists). Gets its own IP on br1, AND joins the 'football-watcher' bridge to
+  reach the translator by name.
+
+  IMPORTANT — this image is built from source, not on Docker Hub. Build it on
+  the Unraid box first:
+      cd /mnt/user/appdata/football-watcher-src && docker build -t football-watcher-web:local .
+  (git clone the repo there first). Then add this container.
+-->
+<Container version="2">
+  <Name>football-watcher-web</Name>
+  <Repository>football-watcher-web:local</Repository>
+  <Registry/>
+  <!-- Primary network: br1 macvlan, so the web UI gets its own LAN IP. -->
+  <Network>br1</Network>
+  <MyIP>192.168.1.123</MyIP>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>Live FIFA World Cup 2026 tracker: live scores (NIFS/NRK), day-grouped matches, group standings, auto-advancing knockout bracket, and match summaries with an EN/NO toggle. Proxies /api/translate to the translator container.</Overview>
+  <Category>MediaApp:Other Tools:</Category>
+  <WebUI>http://[IP]:[PORT:80]/</WebUI>
+  <Icon>https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png</Icon>
+  <!-- Join the SECOND network so it can resolve 'translator' by name. -->
+  <ExtraParams>--network football-watcher</ExtraParams>
+  <PostArgs/>
+  <DateInstalled/>
+  <Requires/>
+  <Config
+    Name="PORT"
+    Target="PORT"
+    Default="80"
+    Mode=""
+    Description="Port the web UI listens on (its own br1 IP)."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false">80</Config>
+  <Config
+    Name="TRANSLATOR_URL"
+    Target="TRANSLATOR_URL"
+    Default="http://translator:8788"
+    Mode=""
+    Description="Where to reach the translator container (by name on the shared bridge)."
+    Type="Variable"
+    Display="advanced"
+    Required="true"
+    Mask="false">http://translator:8788</Config>
+  <Config
+    Name="LOG_LEVEL"
+    Target="LOG_LEVEL"
+    Default="info"
+    Mode=""
+    Description="Logging verbosity: error | warn | info | debug."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">info</Config>
+</Container>

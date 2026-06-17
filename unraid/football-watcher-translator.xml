@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+  Football Watcher — TRANSLATOR container (NorT5 Norwegian->English, internal).
+  Add via Docker tab -> Add Container -> paste this template (or drop it in
+  /boot/config/plugins/dockerMan/templates-user/). Internal only: no WebUI, no
+  ports. The WEB container reaches it by name at http://translator:8788 over the
+  shared 'football-watcher' bridge network.
+
+  Run the TRANSLATOR FIRST so the network exists, then the web container.
+-->
+<Container version="2">
+  <Name>football-watcher-translator</Name>
+  <Repository>talentlesshack/nort5-translator:latest</Repository>
+  <Registry>https://hub.docker.com/r/talentlesshack/nort5-translator/</Registry>
+  <!-- Custom bridge so web<->translator resolve each other by container name,
+       like your media-container group. Create it once (see Network field). -->
+  <Network>football-watcher</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>NorT5 Norwegian-&gt;English translation service for Football Watcher. Internal only — the web container calls it at http://translator:8788. Runs the model in PyTorch; first request loads the model (~3s) then stays warm.</Overview>
+  <Category>MediaApp:Other Tools:</Category>
+  <WebUI/>
+  <Icon>https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png</Icon>
+  <ExtraParams>--network-alias translator</ExtraParams>
+  <PostArgs/>
+  <DateInstalled/>
+  <Requires/>
+  <Config
+    Name="TRANSLATOR_PORT"
+    Target="TRANSLATOR_PORT"
+    Default="8788"
+    Mode=""
+    Description="Internal port the translator listens on. Not exposed to the LAN."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">8788</Config>
+</Container>

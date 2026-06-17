@@ -1,0 +1,405 @@
+:root {
+  --offwhite: #f7f5ef;
+  --offwhite-2: #f1eee6;
+  --card-border: #e2ddd0;
+  --ink: #1f2430;
+  --ink-soft: #5b6170;
+  --green: #1f9d55;
+  --green-soft: #e3f4ea;
+  --amber: #c98a00;
+  --amber-soft: #fbf0d6;
+  --live: #e23636;
+  --accent: #2b5fd9;
+  --shadow: 0 1px 2px rgba(20, 24, 35, 0.06), 0 4px 14px rgba(20, 24, 35, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 100% -10%, #eef3ff 0%, transparent 60%),
+    linear-gradient(180deg, #fbfaf6 0%, #f3f1ea 100%);
+  min-height: 100vh;
+}
+
+.app { max-width: 1400px; margin: 0 auto; padding: 20px clamp(12px, 3vw, 32px) 60px; }
+
+/* ---------- header ---------- */
+.app__header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+}
+.app__title { font-size: clamp(20px, 3vw, 30px); margin: 0; letter-spacing: 0; }
+.app__sub { margin: 4px 0 0; color: var(--ink-soft); font-size: 13px; }
+.app__status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app__updated { color: var(--ink-soft); font-size: 12px; }
+.app__refresh {
+  border: 1px solid var(--card-border); background: var(--offwhite);
+  border-radius: 8px; height: 32px; cursor: pointer; font-size: 12px; font-weight: 700;
+  padding: 0 10px;
+  color: var(--ink); transition: transform .2s, background .2s;
+}
+.app__refresh:hover { background: #fff; }
+
+.badge {
+  font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid transparent;
+}
+.badge--ok { background: var(--green-soft); color: var(--green); border-color: #c4e7d2; }
+.badge--warn { background: var(--amber-soft); color: var(--amber); border-color: #f0deb0; }
+.badge--live { background: #fde4e4; color: var(--live); border-color: #f6c4c4; animation: pulse 1.4s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+/* ---------- tabs ---------- */
+.app__tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+.tab {
+  border: 1px solid var(--card-border); background: var(--offwhite);
+  padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  font-weight: 600; color: var(--ink-soft); transition: all .15s;
+}
+.tab:hover { background: #fff; }
+.tab--active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.empty { color: var(--ink-soft); padding: 40px; text-align: center; font-size: 15px; }
+.empty--err { color: var(--live); }
+
+/* ---------- bracket ---------- */
+/* The tree is a fixed-size canvas (the SVG connector coordinates depend on its
+   exact pixel size). Bracket.jsx measures the container and scales the tree via
+   transform so it ALWAYS fits the screen width — no sideways scrolling. The
+   .bracket__scaler reserves the scaled height so there's no gap or clipping. */
+.bracket {
+  overflow: hidden; padding: 8px 0 24px;
+}
+.bracket__scaler {
+  position: relative;
+  width: 100%;
+}
+.bracket__tree {
+  --bracket-col: 136px;
+  --bracket-gap: 24px;
+  --bracket-row: 34px;
+  width: calc((var(--bracket-col) * 9) + (var(--bracket-gap) * 8));
+}
+.bracket__headings {
+  display: grid;
+  grid-template-columns: repeat(9, var(--bracket-col));
+  column-gap: var(--bracket-gap);
+  align-items: end;
+  margin-bottom: 14px;
+}
+.bracket__round {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0;
+  color: var(--ink-soft); margin: 0; text-align: center; font-weight: 700;
+}
+.bracket__field {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(9, var(--bracket-col));
+  grid-template-rows: repeat(32, var(--bracket-row));
+  column-gap: var(--bracket-gap);
+}
+.bracket__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+.bracket__lines path {
+  fill: none;
+  stroke: #d4cdbd;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bracket__slot {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+}
+.bracket__slot .bm {
+  width: 100%;
+}
+
+/* a knockout match card */
+.bm {
+  background: var(--offwhite); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 7px; box-shadow: var(--shadow); position: relative;
+}
+.bm--live { border-color: var(--live); box-shadow: 0 0 0 2px rgba(226,54,54,.15), var(--shadow); }
+.bm__num {
+  position: absolute; top: -8px; left: 8px; font-size: 8px; font-weight: 700;
+  color: var(--ink-soft); background: var(--offwhite-2); border: 1px solid var(--card-border);
+  padding: 1px 6px; border-radius: 999px;
+}
+.bm__row { padding: 2px 1px; border-radius: 8px; transition: background .2s; }
+.bm__rowtop { display: flex; align-items: center; gap: 5px; }
+.bm__rowtop .flagchip { flex: 1; }
+.bm__row.is-winner { background: var(--green-soft); }
+.bm__row.is-winner .flagchip__name { font-weight: 800; color: var(--green); }
+.bm__row.is-loser { opacity: .5; }
+.bm__score { margin-left: auto; font-weight: 800; font-size: 12px; min-width: 12px; text-align: right; }
+.bm__advanced { color: var(--green); font-size: 9px; margin-left: 2px; }
+.bm__vs { text-align: center; font-size: 8px; color: var(--ink-soft); margin: 1px 0; text-transform: uppercase; letter-spacing: 0; }
+.bm__next {
+  display: block;
+  min-height: 11px;
+  margin: 0 0 0 27px;
+  line-height: 1;
+}
+.bm__nonext { font-size: 9px; color: var(--ink-soft); font-style: italic; }
+
+/* ---------- flag chip (rounded rectangle, off-white) ---------- */
+.flagchip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.flagchip__flag {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fff; border: 1px solid var(--card-border); border-radius: 8px;
+  overflow: hidden; flex: none; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.flagchip__flag img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.flagchip__emoji {
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 1; font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+}
+.flagchip__fallback {
+  font-size: 10px; line-height: 1; font-weight: 800; color: var(--ink-soft);
+  letter-spacing: 0; padding: 0 2px; white-space: nowrap;
+}
+.flagchip__name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flagchip--tbd .flagchip__name { color: var(--ink-soft); font-weight: 500; font-style: italic; }
+
+.flagchip--xs .flagchip__flag { width: 28px; height: 20px; }
+.flagchip--xs .flagchip__emoji { font-size: 18px; }
+.flagchip--xs .flagchip__fallback { font-size: 9px; }
+.flagchip--xs .flagchip__name { font-size: 13px; }
+
+.flagchip--sm .flagchip__flag { width: 34px; height: 24px; }
+.flagchip--sm .flagchip__emoji { font-size: 22px; }
+.flagchip--sm .flagchip__fallback { font-size: 10px; }
+.flagchip--sm .flagchip__name { font-size: 14px; }
+
+.flagchip--md .flagchip__flag { width: 44px; height: 30px; }
+.flagchip--md .flagchip__emoji { font-size: 28px; }
+.flagchip--md .flagchip__fallback { font-size: 11px; }
+.flagchip--md .flagchip__name { font-size: 15px; }
+
+.bracket .flagchip { gap: 5px; }
+.bracket .flagchip--sm .flagchip__flag { width: 22px; height: 16px; border-radius: 5px; }
+.bracket .flagchip--sm .flagchip__emoji { font-size: 15px; }
+.bracket .flagchip--sm .flagchip__fallback { font-size: 8px; }
+.bracket .flagchip--sm .flagchip__name { font-size: 11px; }
+
+/* ---------- countdown ---------- */
+.countdown {
+  font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600;
+  color: var(--accent); display: inline-flex; align-items: center; gap: 4px;
+}
+.countdown__d { color: var(--ink-soft); }
+.countdown--live { color: var(--live); font-weight: 800; letter-spacing: 0; }
+.bracket .countdown {
+  font-size: 9px;
+  gap: 2px;
+  line-height: 1;
+}
+.bracket .countdown__d {
+  color: var(--accent);
+}
+
+/* ---------- groups ---------- */
+.groups {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.group {
+  background: var(--offwhite); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 14px; box-shadow: var(--shadow);
+}
+.group__title { margin: 0 0 10px; font-size: 15px; }
+/* table-layout: fixed so long team names (e.g. "Bosnia & Herzegovina") can't
+   widen the table past the card — the Team column flexes, stat columns are
+   narrow + fixed, and the name truncates with an ellipsis instead. */
+.group__table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
+.group__table th {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0;
+  color: var(--ink-soft); font-weight: 700; padding: 4px 4px; text-align: center;
+}
+.group__table td { padding: 6px 4px; text-align: center; border-top: 1px solid var(--card-border); }
+/* Stat columns (P W D L GD Pts) — narrow fixed; the Team column (1st) takes the rest. */
+.group__table th:not(:first-child),
+.group__table td:not(:first-child) { width: 26px; }
+.group__table th:first-child,
+.group__table td:first-child { width: auto; }
+/* Let the team name inside the first cell truncate rather than push the table wide. */
+.group__table td:first-child .flagchip { max-width: 100%; }
+.group__table td:first-child .flagchip__name { min-width: 0; }
+.ta-l { text-align: left !important; }
+.pts { font-weight: 800; }
+.group__table tr.qualify td { background: var(--green-soft); }
+.group__table tr.qualify td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+.group__table tr.maybe td { background: var(--amber-soft); }
+.group__table tr.maybe td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
+
+/* ---------- group fixtures (per-game scores) ---------- */
+.group__fixhead {
+  margin: 14px 0 6px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-soft); font-weight: 700;
+}
+.fixtures { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fixture {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 8px; padding: 6px 8px; border-radius: 8px; background: #fff;
+  border: 1px solid var(--card-border);
+}
+.fixture--live { border-color: var(--live); box-shadow: 0 0 0 1px rgba(226,54,54,.15); }
+.fixture__team { min-width: 0; display: flex; }
+.fixture__team--home { justify-content: flex-start; }
+.fixture__team--away { justify-content: flex-end; }
+.fixture__team--away .flagchip { flex-direction: row-reverse; }
+.fixture__mid {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  min-width: 56px;
+}
+.fixture__score { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+.fixture__dash { color: var(--ink-soft); font-weight: 600; margin: 0 1px; }
+.fixture__time { font-weight: 700; font-size: 12px; color: var(--ink); }
+.fixture__status { font-size: 10px; line-height: 1; }
+.fixture__ft { color: var(--ink-soft); font-weight: 700; letter-spacing: .05em; }
+.fixture__score--pending { color: var(--ink-soft); }
+.fixture--awaiting { border-color: var(--card-border); }
+.countdown--awaiting { color: var(--amber); font-weight: 800; }
+
+/* ---------- matches view ---------- */
+.matchlist { display: flex; flex-direction: column; gap: 22px; max-width: 760px; margin: 0 auto; }
+.section__title {
+  margin: 0 0 10px; font-size: 13px; font-weight: 800; color: var(--ink);
+  display: flex; align-items: center; gap: 8px;
+}
+.section__count {
+  font-size: 11px; font-weight: 700; color: var(--ink-soft);
+  background: var(--offwhite-2); border: 1px solid var(--card-border);
+  border-radius: 999px; padding: 1px 8px;
+}
+.section--live .section__title { color: var(--live); }
+.fixtures--wide .fixture {
+  grid-template-columns: 110px 1fr auto 1fr;
+  padding: 10px 14px;
+}
+.fixtures--wide .fixture .fixture__team .flagchip__name { font-size: 14px; }
+.fixtures--wide .fixture .flagchip--xs .flagchip__flag { width: 34px; height: 24px; }
+.fixture__tag {
+  font-size: 10px; font-weight: 700; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: .03em;
+  background: var(--offwhite-2); border: 1px solid var(--card-border);
+  border-radius: 6px; padding: 2px 6px; justify-self: start; white-space: nowrap;
+}
+.section--live .fixture--live { border-color: var(--live); box-shadow: 0 0 0 1px rgba(226,54,54,.12); }
+
+/* ---------- collapsible section (Upcoming) ---------- */
+.section__toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: none; padding: 0 0 10px; cursor: pointer;
+  text-align: left; color: inherit;
+}
+.section__title--inline { margin: 0; }
+.section__caret {
+  font-size: 10px; color: var(--ink-soft);
+  transition: transform .15s; display: inline-block;
+}
+.section__caret.is-open { transform: rotate(90deg); }
+
+/* ---------- day-grouped matches (Completed / Upcoming) ---------- */
+.dayblock { margin-bottom: 16px; }
+.dayblock__date {
+  margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: .04em;
+  padding-bottom: 4px; border-bottom: 1px solid var(--card-border);
+}
+/* A row inside a day block gains a leading kickoff-time column. */
+.dayblock .fixtures--wide .fixture {
+  grid-template-columns: 52px 96px 1fr auto 1fr;
+}
+.fixture__kickoff {
+  font-size: 12px; font-weight: 700; color: var(--ink);
+  font-variant-numeric: tabular-nums; justify-self: start; white-space: nowrap;
+}
+
+/* Finished fixtures are clickable for a recap. */
+.fixture--recapable { cursor: pointer; }
+.fixture--recapable:hover { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(47,107,255,.15); }
+
+/* ---------- match summary modal ---------- */
+.summary__backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(15, 23, 42, .55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 5vh 16px;
+}
+.summary {
+  position: relative; width: 100%; max-width: 620px;
+  max-height: 90vh; /* cap height so the card itself never overflows the screen */
+  display: flex; flex-direction: column;
+  background: #fff; border: 1px solid var(--card-border); border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 20px 22px;
+  overscroll-behavior: contain; /* don't let scroll chain to the page behind */
+}
+/* Header stays put; only the body scrolls. */
+.summary__body {
+  overflow-y: auto; overscroll-behavior: contain;
+  margin-right: -8px; padding-right: 8px; /* keep scrollbar off the text */
+}
+.summary__close {
+  position: absolute; top: 10px; right: 12px;
+  border: none; background: transparent; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--ink-soft);
+}
+.summary__close:hover { color: var(--ink); }
+.summary__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin: 0 24px 14px 0; flex-wrap: wrap;
+}
+.summary__teams { margin: 0; font-size: 18px; }
+.summary__tag {
+  color: var(--ink-soft); font-size: 11px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+/* EN/NO language toggle on the summary modal */
+.summary__langtoggle {
+  display: inline-flex; gap: 0; margin: 0 0 14px;
+  border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden;
+}
+.langbtn {
+  border: none; background: var(--offwhite); color: var(--ink-soft);
+  font-size: 12px; font-weight: 700; padding: 5px 14px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.langbtn + .langbtn { border-left: 1px solid var(--card-border); }
+.langbtn:hover { background: #fff; }
+.langbtn--active { background: var(--ink); color: #fff; }
+
+.summary__loading, .summary__error { color: var(--ink-soft); font-size: 14px; }
+.summary__error { color: var(--live); }
+.summary__section { margin-bottom: 16px; }
+.summary__section h4 {
+  margin: 0 0 6px; font-size: 12px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--accent);
+}
+.summary__section p { margin: 0 0 8px; line-height: 1.55; font-size: 14px; color: var(--ink); }
+.summary__goals { margin: 0; padding-left: 18px; }
+.summary__goals li { margin-bottom: 8px; line-height: 1.5; font-size: 13px; color: var(--ink); }
+.summary__src { margin: 4px 0 0; font-size: 11px; color: var(--ink-soft); font-style: italic; }
+
+/* ---------- footer ---------- */
+.app__footer {
+  margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--card-border);
+  color: var(--ink-soft); font-size: 12px; text-align: center;
+}
+/* Bracket scaling is handled in JS (useFitScale in Bracket.jsx), not via media
+   queries — it measures the real container width and fits the tree to any
+   screen, so no fixed breakpoints or horizontal scrolling are needed. */

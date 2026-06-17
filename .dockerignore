@@ -1,0 +1,28 @@
+# Keep the WEB build context lean. The translation model is NO LONGER in this
+# image — it lives in the translator image (../translator). Exclude it here.
+server/models
+translator
+_nort5src
+_nort5venv
+_nort5onnx
+node_modules
+dist
+.git
+.gitignore
+*.log
+npm-debug.log*
+
+# Local/editor cruft
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Docker/compose files don't belong in the image context
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Dev-only tooling not needed at build/runtime
+playwright-report
+test-results
