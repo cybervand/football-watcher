@@ -12,10 +12,11 @@
   <Name>football-watcher-translator</Name>
   <Repository>talentlesshack/nort5-translator:latest</Repository>
   <Registry>https://hub.docker.com/r/talentlesshack/nort5-translator/</Registry>
-  <!-- Custom bridge so web<->translator resolve each other by container name,
-       like your media-container group. Create it once (see Network field). -->
-  <Network>football-watcher</Network>
-  <MyIP/>
+  <!-- Own IP on br1 (no custom network needed). The web container reaches it
+       directly at http://192.168.1.124:8788. Both containers on br1 = simple
+       GUI install, no dual-network reboot bug. -->
+  <Network>br1</Network>
+  <MyIP>192.168.1.124</MyIP>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
   <Support/>
@@ -25,7 +26,7 @@
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/football-watcher-translator.xml</TemplateURL>
   <Icon>https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png</Icon>
-  <ExtraParams>--network-alias translator</ExtraParams>
+  <ExtraParams/>
   <PostArgs/>
   <DateInstalled/>
   <Requires/>

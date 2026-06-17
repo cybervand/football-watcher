@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <!--
   Football Watcher — WEB container (React UI + Node server).
-  Pulls a prebuilt image from Docker Hub (like any Unraid app). Add via the
-  Docker tab AFTER the translator so the 'football-watcher' network exists.
-  Gets its own IP on br1, AND joins the 'football-watcher' bridge to reach the
-  translator by name (http://translator:8788).
+  Pulls a prebuilt image from Docker Hub (like any Unraid app). Gets its own IP
+  on br1 (192.168.1.123) and reaches the translator at its br1 IP
+  (http://192.168.1.124:8788). Both containers on br1 — simple single-network
+  install, no custom bridge, no dual-network reboot bug.
 -->
 <Container version="2">
   <Name>football-watcher-web</Name>
@@ -22,8 +22,7 @@
   <WebUI>http://[IP]:[PORT:80]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/football-watcher-web.xml</TemplateURL>
   <Icon>https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png</Icon>
-  <!-- Join the SECOND network so it can resolve 'translator' by name. -->
-  <ExtraParams>--network football-watcher</ExtraParams>
+  <ExtraParams/>
   <PostArgs/>
   <DateInstalled/>
   <Requires/>
@@ -40,13 +39,13 @@
   <Config
     Name="TRANSLATOR_URL"
     Target="TRANSLATOR_URL"
-    Default="http://translator:8788"
+    Default="http://192.168.1.124:8788"
     Mode=""
-    Description="Where to reach the translator container (by name on the shared bridge)."
+    Description="Where to reach the translator container (its br1 IP:port)."
     Type="Variable"
     Display="advanced"
     Required="true"
-    Mask="false">http://translator:8788</Config>
+    Mask="false">http://192.168.1.124:8788</Config>
   <Config
     Name="LOG_LEVEL"
     Target="LOG_LEVEL"
