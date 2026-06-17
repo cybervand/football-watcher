@@ -21,7 +21,7 @@
   <Category>MediaApp:Other Tools:</Category>
   <WebUI>http://[IP]:[PORT:80]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/football-watcher-web.xml</TemplateURL>
-  <Icon>https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png</Icon>
+  <Icon>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <DateInstalled/>
