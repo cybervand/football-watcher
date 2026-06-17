@@ -56,4 +56,20 @@
     Display="advanced"
     Required="false"
     Mask="false">info</Config>
+  <!-- Tailscale persistent state: maps host appdata -> /tailscale in the
+       container, and points the state dir there so the tailnet login survives
+       restarts. Lets the web container join your tailnet directly (own
+       100.x IP / MagicDNS name), so it's reachable over Tailscale WITHOUT the
+       macvlan-subnet-router problem. Enable the Tailscale toggle when adding. -->
+  <Config
+    Name="Tailscale State"
+    Target="/tailscale"
+    Default="/mnt/user/appdata/football-watcher-web/tailscale"
+    Mode="rw"
+    Description="Host folder for Tailscale state (persists tailnet login)."
+    Type="Path"
+    Display="advanced"
+    Required="true"
+    Mask="false">/mnt/user/appdata/football-watcher-web/tailscale</Config>
+  <TailscaleStateDir>/tailscale/.tailscale_state</TailscaleStateDir>
 </Container>
