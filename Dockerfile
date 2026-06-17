@@ -17,6 +17,7 @@ RUN npm ci || npm install
 
 # Build the production frontend into /app/dist.
 COPY index.html vite.config.js ./
+COPY public ./public
 COPY src ./src
 RUN npm run build
 
