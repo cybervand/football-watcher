@@ -42,7 +42,7 @@ Then `docker compose up -d` and open `http://<host>:8787`.
 1. Install **Docker Compose Manager** from Community Apps.
 2. Clone this repo onto the server (so the web image can be built from source):
    ```bash
-   git clone <your-repo-url> /mnt/user/appdata/football-watcher-src
+   git clone https://github.com/cybervand/football-watcher /mnt/user/appdata/football-watcher-src
    ```
    (Or pull updates later with `git pull` in that folder.)
 3. In Compose Manager: **Add New Stack** → name it `football-watcher` → paste/point at
