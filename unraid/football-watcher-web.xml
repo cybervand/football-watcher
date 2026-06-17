@@ -22,7 +22,8 @@
   <WebUI>http://[IP]:[PORT:80]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/football-watcher-web.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/icon.png</Icon>
-  <ExtraParams/>
+  <!-- hostname 'football' = the Tailscale node name -> reach it at http://football -->
+  <ExtraParams>--hostname=football</ExtraParams>
   <PostArgs/>
   <DateInstalled/>
   <Requires/>
