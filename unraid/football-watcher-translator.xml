@@ -23,6 +23,7 @@
   <Overview>NorT5 Norwegian-&gt;English translation service for Football Watcher. Internal only — the web container calls it at http://translator:8788. Runs the model in PyTorch; first request loads the model (~3s) then stays warm.</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/football-watcher-translator.xml</TemplateURL>
   <Icon>https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Football_%28soccer_ball%29.svg/240px-Football_%28soccer_ball%29.svg.png</Icon>
   <ExtraParams>--network-alias translator</ExtraParams>
   <PostArgs/>
