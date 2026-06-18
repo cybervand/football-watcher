@@ -34,6 +34,29 @@ def log(msg):
     print(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} [translator] {msg}", flush=True)
 
 
+# Long paragraphs are split into sentence chunks under CHUNK_CHARS so each decode
+# is short: first text streams in ~2s and the KV-cache stays small. Short recaps
+# (<= limit) stay whole to keep NorT5's paragraph-level context. 0 disables.
+import re as _re
+CHUNK_CHARS = int(os.environ.get("CHUNK_CHARS", "400"))
+
+
+def split_chunks(text, limit=CHUNK_CHARS):
+    text = (text or "").strip()
+    if limit <= 0 or len(text) <= limit:
+        return [text] if text else []
+    chunks, cur = [], ""
+    for s in _re.split(r"(?<=[.!?]) ", text):
+        if cur and len(cur) + 1 + len(s) > limit:
+            chunks.append(cur)
+            cur = s
+        else:
+            cur = (cur + " " + s).strip() if cur else s
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
 class TorchTranslator:
     """PyTorch fallback, loaded once, lazily, then reused for every request.
     All torch imports are inside this class so the ONNX-only runtime doesn't
@@ -270,10 +293,17 @@ class OnnxTranslator:
         if beams != 1:
             log("ONNX runtime uses greedy decoding; ignoring NUM_BEAMS != 1")
         max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "256"))
-        return "\n".join(self._greedy_one_line(line, max_new_tokens) for line in lines)
+        out_lines = []
+        for line in lines:
+            # Long paragraphs are translated in sentence chunks and rejoined.
+            parts = [self._greedy_one_line(c, max_new_tokens) for c in split_chunks(line)]
+            out_lines.append(" ".join(p for p in parts if p))
+        return "\n".join(out_lines)
 
     def translate_stream(self, texts, emit):
-        """Translate each text, streaming partial English via emit(event). Events:
+        """Translate each text, streaming partial English via emit(event). Long
+        paragraphs are split into sentence chunks so the first text appears fast
+        and streams smoothly. Events:
         {"i": idx, "partial": "...", "done": False} per token,
         {"i": idx, "text": "...", "done": False} when a text finishes,
         {"done": True, "translations": [...]} at the end."""
@@ -281,12 +311,16 @@ class OnnxTranslator:
         results = []
         for idx, text in enumerate(texts):
             lines = [s.strip() for s in (text or "").split("\n") if s.strip()]
-            done_parts = []
+            done_lines = []
             for line in lines:
-                def on_partial(t, _i=idx, _dp=done_parts):
-                    emit({"i": _i, "partial": "\n".join(_dp + [t]).strip(), "done": False})
-                done_parts.append(self._greedy_one_line(line, max_new_tokens, on_partial=on_partial))
-            full = "\n".join(done_parts).strip()
+                done_chunks = []
+                for chunk in split_chunks(line):
+                    def on_partial(t, _i=idx, _dl=done_lines, _dc=done_chunks):
+                        cur = " ".join(_dc + [t])
+                        emit({"i": _i, "partial": "\n".join(_dl + [cur]).strip(), "done": False})
+                    done_chunks.append(self._greedy_one_line(chunk, max_new_tokens, on_partial=on_partial))
+                done_lines.append(" ".join(p for p in done_chunks if p))
+            full = "\n".join(done_lines).strip()
             results.append(full)
             emit({"i": idx, "text": full, "done": False})
         emit({"done": True, "translations": results})
