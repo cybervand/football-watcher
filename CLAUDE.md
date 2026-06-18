@@ -163,9 +163,12 @@ pair-key dump prints "flipped" — that's the dump, not a bug; check the rendere
 
 Templates are GitHub-linked (`TemplateURL`). Both images pull from Docker Hub.
 
-One-shot install or update (pulls latest, recreates both on br1):
+One-shot install or update (pulls latest, recreates on br1):
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/cybervand/football-watcher/main/unraid/install.sh)
+# only one service (avoids recreating the other):
+bash <(curl -s .../install.sh) --web-only
+bash <(curl -s .../install.sh) --translator-only
 # override IPs: WEB_IP=192.168.1.123 TR_IP=192.168.1.124 bash <(...)
 ```
 
