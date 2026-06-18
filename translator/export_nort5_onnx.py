@@ -271,6 +271,11 @@ def main():
     )
 
     save_generation_assets(model, num_layers)
+    # Save the tokenizer next to the ONNX graphs so the slim runtime can load it
+    # WITHOUT the HF cache / pytorch_model.bin (keeps the runtime image small).
+    tok_dir = ONNX_MODEL_DIR / "tokenizer"
+    tokenizer.save_pretrained(str(tok_dir))
+    log(f"saved tokenizer to {tok_dir}")
     log(f"wrote ONNX assets to {ONNX_MODEL_DIR}")
 
 

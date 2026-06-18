@@ -17,10 +17,11 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
-import torch
-import transformers
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from transformers.generation import LogitsProcessor
+from transformers import AutoTokenizer
+
+# NOTE: torch and AutoModelForSeq2SeqLM are imported LAZILY inside TorchTranslator
+# (the fallback path). The default ONNX Runtime path needs neither, so the slim
+# runtime image can ship without PyTorch (~10x smaller image).
 
 MODEL_NAME = os.environ.get("MODEL_NAME", "ltg/nort5-base-en-no-translation")
 MODEL_LOCAL_ONLY = os.environ.get("MODEL_LOCAL_ONLY", "1").lower() not in {"0", "false", "no"}
@@ -33,23 +34,32 @@ def log(msg):
     print(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} [translator] {msg}", flush=True)
 
 
-# Repetition penalty from the author's reference translate.py.
-class RepetitionPenaltyLogitsProcessor(LogitsProcessor):
-    def __init__(self, penalty, model):
-        last_bias = model.classifier.nonlinearity[-1].bias.data
-        last_bias = torch.nn.functional.log_softmax(last_bias, dim=-1)
-        self.penalty = penalty * (last_bias - last_bias.max())
-
-    def __call__(self, input_ids, scores):
-        penalized = torch.gather(scores + self.penalty.unsqueeze(0).to(input_ids.device), 1, input_ids).to(scores.dtype)
-        scores.scatter_(1, input_ids, penalized)
-        return scores
-
-
 class TorchTranslator:
-    """PyTorch fallback, loaded once, lazily, then reused for every request."""
+    """PyTorch fallback, loaded once, lazily, then reused for every request.
+    All torch imports are inside this class so the ONNX-only runtime doesn't
+    need PyTorch installed."""
 
     def __init__(self):
+        import torch
+        import transformers
+        from transformers import AutoModelForSeq2SeqLM
+        from transformers.generation import LogitsProcessor
+        self._torch = torch
+        self._transformers = transformers
+
+        # Repetition penalty from the author's reference translate.py.
+        class RepetitionPenaltyLogitsProcessor(LogitsProcessor):
+            def __init__(self, penalty, model):
+                last_bias = model.classifier.nonlinearity[-1].bias.data
+                last_bias = torch.nn.functional.log_softmax(last_bias, dim=-1)
+                self.penalty = penalty * (last_bias - last_bias.max())
+
+            def __call__(self, input_ids, scores):
+                penalized = torch.gather(scores + self.penalty.unsqueeze(0).to(input_ids.device), 1, input_ids).to(scores.dtype)
+                scores.scatter_(1, input_ids, penalized)
+                return scores
+        self._RepPen = RepetitionPenaltyLogitsProcessor
+
         # Use the GPU if available (near-instant); fall back to CPU otherwise.
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         gpu = torch.cuda.get_device_name(0) if self.device == "cuda" else "CPU"
@@ -71,6 +81,8 @@ class TorchTranslator:
         log(f"model ready in {time.time() - t0:.1f}s")
 
     def translate_one(self, text):
+        torch = self._torch
+        transformers = self._transformers
         # Split on newlines into paragraphs, like the reference; each line gets
         # the [CLS] >>eng<< >>nob<< … [SEP] framing (target lang, then source).
         lines = [s.strip() for s in (text or "").split("\n") if s.strip()]
@@ -94,7 +106,7 @@ class TorchTranslator:
             num_beams=beams,
             do_sample=False,
             use_cache=True,
-            logits_processor=[RepetitionPenaltyLogitsProcessor(0.5, self.model), transformers.LogitNormalization()],
+            logits_processor=[self._RepPen(0.5, self.model), transformers.LogitNormalization()],
         )
         if beams > 1:
             gen_kwargs.update(length_penalty=1.6, early_stopping=True)
@@ -124,7 +136,11 @@ class OnnxTranslator:
         providers = self._providers(ort)
         log(f"loading model {MODEL_NAME} with ONNX Runtime {ort.__version__} providers={providers}")
         t0 = time.time()
-        self.tok = AutoTokenizer.from_pretrained(MODEL_NAME, local_files_only=MODEL_LOCAL_ONLY)
+        # Prefer the tokenizer saved next to the ONNX graphs (no HF cache needed
+        # in the slim runtime); fall back to the model id.
+        tok_dir = ONNX_MODEL_DIR / "tokenizer"
+        tok_src = str(tok_dir) if tok_dir.exists() else MODEL_NAME
+        self.tok = AutoTokenizer.from_pretrained(tok_src, local_files_only=MODEL_LOCAL_ONLY)
         self.cls = self.tok.convert_tokens_to_ids("[CLS]")
         self.sep = self.tok.convert_tokens_to_ids("[SEP]")
         self.pad = self.tok.convert_tokens_to_ids("[PAD]")

@@ -1,0 +1,11 @@
+# RUNTIME deps for the ONNX path only — NO torch (the slim final image).
+# torch is only needed at BUILD time to export the ONNX graphs (see
+# requirements.txt + the export stage in the Dockerfile).
+#  - transformers/tokenizers pinned so the sentencepiece tokenizer loads exactly
+#    as during export. transformers imports fine without torch for AutoTokenizer.
+transformers==4.46.3
+tokenizers>=0.20,<0.21
+sentencepiece==0.2.0
+huggingface-hub<0.27
+numpy<2
+onnxruntime==1.27.0
