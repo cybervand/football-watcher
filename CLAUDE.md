@@ -110,17 +110,33 @@ pair-key dump prints "flipped" — that's the dump, not a bug; check the rendere
 
 - Model: **`ltg/nort5-base-en-no-translation`** (Univ. of Oslo). Chosen over the
   old opus-mt for better football phrasing ("second half" not "second round").
-- **Runs in ONNX Runtime by default**: the translator image exports separate
-  encoder/decoder graphs at build time. PyTorch remains installed for export and
-  `TRANSLATOR_RUNTIME=torch` fallback.
+- **Runs in ONNX Runtime with a decoder KV-cache.** `export_nort5_onnx.py`
+  exports THREE graphs: `encoder.onnx`, `decoder_init.onnx` (step 0, no past),
+  `decoder_step.onnx` (steps 1+, takes all 4 KV/layer). The server loops init →
+  step feeding present→past. Greedy, per-line batch=1. Perf: warm recap ~0.9s on
+  the server (5600X CPU), vs ~8s for the old PyTorch path.
+  - **Why two graphs + explicit cross-KV I/O:** NorT5's `Attention.forward` has
+    size-comparison conditionals that the ONNX tracer bakes in as constants. A
+    single merged graph mis-wires the self-cache (grabs encoder keys → wrong
+    output). Exporting cross-KV as explicit inputs keeps self/cross separate.
+  - Export needs `no_grad()` + `.clone()` for example inputs (inference-mode
+    tensors can't be traced by `torch.onnx.export`). Plus the `MaskedSoftmax` /
+    `torch.full` patches in the export script (custom autograd / aten::full).
+- **Slim multi-stage image (~4.5GB).** EXPORT stage installs CPU torch only to
+  produce the ONNX graphs; RUNTIME stage ships onnxruntime + tokenizer + graphs,
+  NO torch (`requirements-runtime.txt`). torch imports are lazy in
+  `TorchTranslator`. Tokenizer saved next to the graphs (no HF cache / .bin in
+  runtime). `TRANSLATOR_RUNTIME=auto|onnx|torch`; `ORT_THREADS=4` (CPU sweet spot).
+  ONNX Runtime auto-uses CUDAExecutionProvider if onnxruntime-gpu + GPU present.
 - **Pins are REQUIRED** (`translator/requirements.txt`): transformers 4.46.3
   (5.x breaks the custom code — missing `all_tied_weights_keys`); tokenizers
   <0.21; Python 3.12 (older tokenizers have no wheels on 3.13+/3.14).
-- ONNX export/runtime adds onnxruntime 1.27.0 and onnx 1.22.0.
-- Model baked into the translator image at build (works offline; first request
-  ~3 s to load, then warm). Summaries cached per-browser in IndexedDB.
-- Frontend keeps BOTH the English and original Norwegian so the EN/NO toggle is
-  instant (no re-fetch). Wikipedia fallback summaries are NOT cached.
+- Frontend is **Norwegian-first**: the recap shows the original NO instantly;
+  clicking English translates lazily on demand (then caches it). Summaries cached
+  per-browser in IndexedDB. Wikipedia fallback summaries are NOT cached.
+- CPU perf notes (measured): int8 dynamic-quant helps (~20%); fp16 is ~30x
+  SLOWER on CPU (emulated); 4 threads optimal, 12+ tanks it (HT contention);
+  torch.compile/OpenVINO/int4 all blocked by the custom model code.
 
 ---
 
