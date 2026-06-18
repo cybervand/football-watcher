@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 #   web        : the React UI + Node server. Tiny image, built from THIS source
 #                (or pulled from Docker Hub). Proxies /api/translate -> translator.
-#   translator : NorT5 NO->EN model running in PyTorch. Big image, pulled from
+#   translator : NorT5 NO->EN model running in ONNX Runtime. Big image, pulled from
 #                Docker Hub (rarely changes). Internal-only — not exposed to LAN.
 #
 # Run:  docker compose up -d         (builds web locally, pulls translator)

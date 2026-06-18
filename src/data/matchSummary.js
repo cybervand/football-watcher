@@ -92,19 +92,42 @@ async function teamContext(team) {
 export async function buildMatchSummary(match) {
   const key = summaryKey(match)
   const cached = await getCachedSummary(key)
-  // Use the cache only if it's the newer shape that includes the original
-  // Norwegian (recapNo) for the EN/NO toggle. Older cached entries lack it, so
-  // we rebuild them once to capture both languages.
+  // Reuse cache if it has the Norwegian original (newer shape). The cached entry
+  // may also already carry an English translation from a previous request.
   if (cached && (cached.recapNo || cached.goalsNo)) return { ...cached, cached: true }
 
   const data = await buildSummaryFresh(match)
 
-  // Persist only finished NIFS recaps — those are final and won't change.
-  // (A fallback/no-recap result may improve later, so don't lock it in.)
-  if (data.source === 'nifs' && (data.recap || data.goals?.length)) {
+  // Cache the Norwegian recap immediately (it's final). English gets added to
+  // the same cache entry later by translateSummary().
+  if (data.source === 'nifs' && (data.recapNo || data.goalsNo?.length)) {
     await putCachedSummary(key, data)
   }
   return data
+}
+
+/**
+ * Translate an already-built NIFS summary's Norwegian text to English, lazily.
+ * Returns { recap, goals } in English. Caches the result onto the summary's
+ * cache entry so a match is only ever translated once. Call this when the user
+ * switches to English.
+ */
+export async function translateSummary(match, data) {
+  // Already translated (in memory or from cache)? Return as-is.
+  if (data?.recap || data?.goals?.length) return { recap: data.recap, goals: data.goals }
+
+  const toTranslate = [data?.recapNo || '', ...(data?.goalsNo || [])]
+  if (!toTranslate.some(Boolean)) return { recap: null, goals: [] }
+
+  const translated = await translateBatch(toTranslate)
+  const recap = data?.recapNo ? translated[0] : null
+  const goals = translated.slice(1).filter(Boolean)
+
+  // Persist the English alongside the Norwegian so next time it's instant.
+  const key = summaryKey(match)
+  const merged = { ...data, recap, goals }
+  if (data?.source === 'nifs') await putCachedSummary(key, merged)
+  return { recap, goals }
 }
 
 /** Build a summary from scratch (NIFS + translation, or Wikipedia fallback). */
@@ -143,18 +166,13 @@ async function buildSummaryFresh(match) {
     return { recap: null, goals: [], context: context.length ? context : null, source: 'wikipedia' }
   }
 
-  // One batched request to the server translates the recap + all goal lines.
-  const toTranslate = [recapNo || '', ...goalLines]
-  const translated = await translateBatch(toTranslate)
-  const recap = recapNo ? translated[0] : null
-  const goals = translated.slice(1).filter(Boolean)
-
-  // Keep the ORIGINAL Norwegian too, so the summary modal can offer an EN/NO
-  // toggle without re-fetching or re-translating. `*No` fields mirror the
-  // English ones.
+  // NORWEGIAN-FIRST: return the original Norwegian immediately, NO translation.
+  // English is produced lazily (and cached) only when the user asks for it via
+  // translateSummary(). This makes the recap appear instantly and only runs the
+  // (slow) translator on demand.
   return {
-    recap,
-    goals,
+    recap: null,         // English not produced yet
+    goals: [],
     recapNo: recapNo || null,
     goalsNo: goalLines,
     context: null,

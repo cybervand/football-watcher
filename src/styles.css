@@ -371,12 +371,13 @@ body {
 }
 /* EN/NO language toggle on the summary modal */
 .summary__langtoggle {
-  display: inline-flex; gap: 0; margin: 0 0 14px;
+  display: inline-flex; width: fit-content; gap: 0; margin: 0 0 14px;
   border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden;
 }
 .langbtn {
   border: none; background: var(--offwhite); color: var(--ink-soft);
   font-size: 12px; font-weight: 700; padding: 5px 14px; cursor: pointer;
+  flex: 0 0 auto; white-space: nowrap; min-width: 92px; text-align: center;
   transition: background .15s, color .15s;
 }
 .langbtn + .langbtn { border-left: 1px solid var(--card-border); }

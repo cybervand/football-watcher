@@ -27,3 +27,7 @@ server/models/
 _nort5src/
 _nort5venv/
 _nort5onnx/
+
+# Python build cruft
+__pycache__/
+*.pyc

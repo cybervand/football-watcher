@@ -5,7 +5,7 @@
 //   1. Serves the production build in ../dist (the React app).
 //   2. POST /api/translate  { texts: string[] }  ->  { translations: string[] }
 //      is PROXIED to the NorT5 translator service (a separate container running
-//      the model in PyTorch — see ../translator/). The web image stays small;
+//      the model through ONNX Runtime — see ../translator/). The web image stays small;
 //      the heavy model lives only in the translator image.
 //
 // In the compose stack the translator is reachable at http://translator:8788.

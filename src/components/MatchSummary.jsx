@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { buildMatchSummary } from '../data/matchSummary.js'
+import { buildMatchSummary, translateSummary } from '../data/matchSummary.js'
 
-// Modal recap for a finished match. Fetches the NIFS commentary, translates the
-// full-time summary + goal moments to English (or falls back to team context),
-// and renders them. Close by clicking the backdrop, the X, or pressing Escape.
+// Modal recap for a finished match. Shows the ORIGINAL Norwegian instantly;
+// switching to English runs the translator on demand (and caches it). Close by
+// clicking the backdrop, the X, or pressing Escape.
 export default function MatchSummary({ match, onClose }) {
   const [state, setState] = useState({ loading: true, data: null, error: null })
-  const [lang, setLang] = useState('en') // 'en' = translated, 'no' = original Norwegian
+  const [lang, setLang] = useState('no') // default to original Norwegian
+  const [translating, setTranslating] = useState(false)
 
   useEffect(() => {
     let alive = true
     setState({ loading: true, data: null, error: null })
+    setLang('no')
     buildMatchSummary(match)
       .then((data) => alive && setState({ loading: false, data, error: null }))
       .catch((e) => alive && setState({ loading: false, data: null, error: e.message }))
@@ -18,6 +20,23 @@ export default function MatchSummary({ match, onClose }) {
       alive = false
     }
   }, [match?.nifsId, match?.team1, match?.team2])
+
+  // Switching to English translates lazily (once), then caches onto the data.
+  async function chooseEnglish() {
+    setLang('en')
+    const d = state.data
+    if (!d || d.recap || d.goals?.length) return // already have English
+    if (!(d.recapNo || d.goalsNo?.length)) return // nothing to translate
+    setTranslating(true)
+    try {
+      const en = await translateSummary(match, d)
+      setState((s) => ({ ...s, data: { ...s.data, recap: en.recap, goals: en.goals } }))
+    } catch {
+      /* keep Norwegian visible if translation fails */
+    } finally {
+      setTranslating(false)
+    }
+  }
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -37,10 +56,12 @@ export default function MatchSummary({ match, onClose }) {
   const score = match.score ? `${match.score[0]} - ${match.score[1]}` : ''
   const { loading, data, error } = state
 
-  // The EN/NO toggle is only meaningful for NIFS recaps where we kept the
-  // original Norwegian. Pick the right text for the chosen language.
+  // The toggle only applies to NIFS recaps where we have the Norwegian original.
   const hasNorwegian = data?.source === 'nifs' && (data.recapNo || data.goalsNo?.length)
-  const showNo = lang === 'no' && hasNorwegian
+  // Show English only when chosen AND it's ready; otherwise show Norwegian (so
+  // it's never blank while translating or if translation failed).
+  const englishReady = !!(data?.recap || data?.goals?.length)
+  const showNo = !(lang === 'en' && englishReady)
   const recapText = showNo ? data?.recapNo : data?.recap
   const goalsText = showNo ? data?.goalsNo : data?.goals
 
@@ -57,21 +78,21 @@ export default function MatchSummary({ match, onClose }) {
         {hasNorwegian && (
           <div className="summary__langtoggle" role="group" aria-label="Summary language">
             <button
-              className={lang === 'en' ? 'langbtn langbtn--active' : 'langbtn'}
-              onClick={() => setLang('en')}
-            >
-              English
-            </button>
-            <button
               className={lang === 'no' ? 'langbtn langbtn--active' : 'langbtn'}
               onClick={() => setLang('no')}
             >
               Norsk
             </button>
+            <button
+              className={lang === 'en' ? 'langbtn langbtn--active' : 'langbtn'}
+              onClick={chooseEnglish}
+            >
+              {translating ? 'Translating…' : 'English'}
+            </button>
           </div>
         )}
 
-        {loading && <p className="summary__loading">Reading and translating the match report…</p>}
+        {loading && <p className="summary__loading">Reading the match report…</p>}
         {error && <p className="summary__error">Couldn’t load a summary: {error}</p>}
 
         {data && (

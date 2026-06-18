@@ -14,7 +14,7 @@ Docker Hub.
 ```
 Browser ──> web container (React UI + Node server, br1 IP 192.168.1.123:80)
                 │  serves dist/, proxies /api/translate
-                └──> translator container (NorT5 PyTorch, br1 IP 192.168.1.124:8788)
+                └──> translator container (NorT5 ONNX Runtime, br1 IP 192.168.1.124:8788)
 
 Browser also fetches DIRECTLY (client-side, not via server):
    - live scores  -> NIFS API (v3api.nifs.no)  + openfootball (fixtures/bracket)
@@ -23,8 +23,8 @@ Browser also fetches DIRECTLY (client-side, not via server):
 
 - **web** is tiny (~330 MB): Node serves the built frontend and proxies
   `/api/translate` to the translator. No ML deps.
-- **translator** is large (~3.6 GB): runs `ltg/nort5-base-en-no-translation` in
-  PyTorch. Internal service; the web calls it by br1 IP.
+- **translator** is large (~3.6 GB): runs `ltg/nort5-base-en-no-translation`
+  through ONNX Runtime. Internal service; the web calls it by br1 IP.
 - The two communicate over **br1** by IP (NOT a custom bridge — see Networking).
 
 ---
@@ -72,7 +72,8 @@ server/
   index.js                 Node http server: serves dist/, proxies /api/translate
                            to TRANSLATOR_URL; structured logging (LOG_LEVEL)
 translator/
-  translate_server.py      NorT5 PyTorch translate service (POST /api/translate)
+  translate_server.py      NorT5 ONNX Runtime translate service (POST /api/translate)
+  export_nort5_onnx.py     exports encoder/decoder ONNX graphs at image build
   requirements.txt         PINNED: torch 2.4.1, transformers 4.46.3, tok <0.21
   Dockerfile               python:3.12-slim; bakes the model in at build
 Dockerfile                 web image (multi-stage: vite build -> slim node)
@@ -109,12 +110,13 @@ pair-key dump prints "flipped" — that's the dump, not a bug; check the rendere
 
 - Model: **`ltg/nort5-base-en-no-translation`** (Univ. of Oslo). Chosen over the
   old opus-mt for better football phrasing ("second half" not "second round").
-- **Runs in PyTorch, NOT ONNX**: NorT5's custom code (`modeling_nort5.py`, a
-  `torch.autograd.Function` + custom relative attention) does not export to ONNX
-  cleanly. Native PyTorch is the reliable path.
+- **Runs in ONNX Runtime by default**: the translator image exports separate
+  encoder/decoder graphs at build time. PyTorch remains installed for export and
+  `TRANSLATOR_RUNTIME=torch` fallback.
 - **Pins are REQUIRED** (`translator/requirements.txt`): transformers 4.46.3
   (5.x breaks the custom code — missing `all_tied_weights_keys`); tokenizers
   <0.21; Python 3.12 (older tokenizers have no wheels on 3.13+/3.14).
+- ONNX export/runtime adds onnxruntime 1.27.0 and onnx 1.22.0.
 - Model baked into the translator image at build (works offline; first request
   ~3 s to load, then warm). Summaries cached per-browser in IndexedDB.
 - Frontend keeps BOTH the English and original Norwegian so the EN/NO toggle is

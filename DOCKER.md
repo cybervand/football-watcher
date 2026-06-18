@@ -5,7 +5,7 @@ Football Watcher runs as a **two-container stack**:
 | Service | What it is | Image | Size |
 |---|---|---|---|
 | **web** | React UI + Node server. Serves the app and proxies `/api/translate`. | Built **locally from this repo's source** (`football-watcher-web:local`) | ~330 MB |
-| **translator** | NorT5 Norwegian→English model running in PyTorch. Internal-only. | Pulled from **Docker Hub** (`talentlesshack/nort5-translator`) | ~3.6 GB |
+| **translator** | NorT5 Norwegian→English model running in ONNX Runtime. Internal-only. | Pulled from **Docker Hub** (`talentlesshack/nort5-translator`) | ~3.6 GB |
 
 **Why split this way:** the web app is tiny and changes often, so it's built from source on the spot. The translation model is huge and almost never changes, so it's a prebuilt Docker Hub image you just pull. The web app talks to the translator over a private internal network — the translator is never exposed to your LAN.
 
@@ -73,15 +73,24 @@ No volumes — the stack is stateless (summary cache lives in each browser).
 
 ## The translation model (for maintainers)
 
-The translator runs **`ltg/nort5-base-en-no-translation`** (University of Oslo) in
-PyTorch. It is NOT converted to ONNX because its custom model code
-(`modeling_nort5.py`, with a `torch.autograd.Function` and custom relative
-attention) does not export cleanly. Running it natively is the reliable path.
+The translator runs **`ltg/nort5-base-en-no-translation`** (University of Oslo)
+through ONNX Runtime. The Docker build first downloads the Hugging Face snapshot,
+then `translator/export_nort5_onnx.py` exports separate encoder and decoder
+graphs into `/models/nort5-onnx`.
+
+NorT5 still needs its pinned PyTorch/Transformers stack during export because its
+custom model code (`modeling_nort5.py`, with custom relative attention) is not a
+standard Transformers architecture. The runtime defaults to
+`TRANSLATOR_RUNTIME=auto`: use ONNX graphs when present, otherwise fall back to
+PyTorch. Set `TRANSLATOR_RUNTIME=onnx` to fail if ONNX assets are missing, or
+`TRANSLATOR_RUNTIME=torch` to force the old path.
 
 The pins in `translator/requirements.txt` are **required**:
 - `transformers==4.46.3` — 5.x breaks NorT5's custom code (`all_tied_weights_keys`).
 - `tokenizers <0.21` — to match transformers 4.46.x.
 - Python **3.12** — older `tokenizers` has no wheels on 3.13+/3.14.
+
+ONNX export/runtime adds `onnxruntime==1.27.0` and `onnx==1.22.0`.
 
 The model is baked into the translator image at build time, so the container
 works offline and the first request only pays model-load time (~3 s), not a
