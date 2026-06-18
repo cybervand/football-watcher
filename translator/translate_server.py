@@ -115,6 +115,17 @@ class TorchTranslator:
         paras = [self.tok.decode(c, skip_special_tokens=True).strip() for c in out]
         return "\n".join(paras)
 
+    def translate_stream(self, texts, emit):
+        """Fallback: PyTorch path isn't token-streamed; emit each text's result
+        as it completes, then the final batch."""
+        results = []
+        for idx, text in enumerate(texts):
+            out = self.translate_one(text)
+            results.append(out)
+            emit({"i": idx, "text": out, "done": False})
+        emit({"done": True, "translations": results})
+        return results
+
 
 class OnnxTranslator:
     """ONNX Runtime translator using exported encoder/decoder graphs."""
@@ -196,9 +207,11 @@ class OnnxTranslator:
             scores[row, seen] = scores[row, seen] + self.repetition_penalty[seen]
         return scores
 
-    def _greedy_one_line(self, line, max_new_tokens):
+    def _greedy_one_line(self, line, max_new_tokens, on_partial=None):
         """KV-cache greedy decode for a SINGLE line (batch=1). init graph for the
-        first step, step graph (feeding present->past) for the rest."""
+        first step, step graph (feeding present->past) for the rest. If on_partial
+        is given, it's called with the decoded text-so-far after each token (for
+        streaming)."""
         ids = ([self.cls, self.eng, self.nob] + self.tok(line).input_ids + [self.sep])[:512]
         input_ids = np.array([ids], dtype=np.int64)
         attention_mask = (input_ids != self.pad).astype(np.int64)
@@ -221,6 +234,8 @@ class OnnxTranslator:
         scores[seen] += self.repetition_penalty[seen]
         nxt = int(np.argmax(scores))
         out.append(nxt)
+        if nxt != self.eos and on_partial:
+            on_partial(self.tok.decode(out, skip_special_tokens=True).strip())
         if nxt == self.eos:
             return self.tok.decode(out, skip_special_tokens=True).strip()
 
@@ -243,6 +258,8 @@ class OnnxTranslator:
             out.append(nxt)
             if nxt == self.eos:
                 break
+            if on_partial:
+                on_partial(self.tok.decode(out, skip_special_tokens=True).strip())
         return self.tok.decode(out, skip_special_tokens=True).strip()
 
     def translate_one(self, text):
@@ -254,6 +271,26 @@ class OnnxTranslator:
             log("ONNX runtime uses greedy decoding; ignoring NUM_BEAMS != 1")
         max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "256"))
         return "\n".join(self._greedy_one_line(line, max_new_tokens) for line in lines)
+
+    def translate_stream(self, texts, emit):
+        """Translate each text, streaming partial English via emit(event). Events:
+        {"i": idx, "partial": "...", "done": False} per token,
+        {"i": idx, "text": "...", "done": False} when a text finishes,
+        {"done": True, "translations": [...]} at the end."""
+        max_new_tokens = int(os.environ.get("MAX_NEW_TOKENS", "256"))
+        results = []
+        for idx, text in enumerate(texts):
+            lines = [s.strip() for s in (text or "").split("\n") if s.strip()]
+            done_parts = []
+            for line in lines:
+                def on_partial(t, _i=idx, _dp=done_parts):
+                    emit({"i": _i, "partial": "\n".join(_dp + [t]).strip(), "done": False})
+                done_parts.append(self._greedy_one_line(line, max_new_tokens, on_partial=on_partial))
+            full = "\n".join(done_parts).strip()
+            results.append(full)
+            emit({"i": idx, "text": full, "done": False})
+        emit({"done": True, "translations": results})
+        return results
 
 
 _translator = None
@@ -290,14 +327,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True})
         return self._json(404, {"error": "not found"})
 
-    def do_POST(self):
-        if self.path != "/api/translate":
-            return self._json(404, {"error": "not found"})
+    def _read_texts(self):
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length) if length else b""
+        data = json.loads(raw or b"{}")
+        return data.get("texts") or ([data["text"]] if data.get("text") else [])
+
+    def do_POST(self):
+        if self.path == "/api/translate/stream":
+            return self._do_stream()
+        if self.path != "/api/translate":
+            return self._json(404, {"error": "not found"})
         try:
-            data = json.loads(raw or b"{}")
-            texts = data.get("texts") or ([data["text"]] if data.get("text") else [])
+            texts = self._read_texts()
         except Exception:
             return self._json(400, {"error": "invalid JSON"})
         if not texts:
@@ -312,6 +354,42 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             log(f"FAILED: {e}")
             return self._json(500, {"error": str(e)})
+
+    def _do_stream(self):
+        """NDJSON stream: one JSON object per line, flushed as the model emits
+        partial English. Client reads incrementally for a live translation."""
+        try:
+            texts = self._read_texts()
+        except Exception:
+            return self._json(400, {"error": "invalid JSON"})
+        if not texts:
+            return self._json(400, {"error": "no texts provided"})
+        t0 = time.time()
+        log(f"stream request: {len(texts)} text(s), {sum(len(t or '') for t in texts)} chars")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        def emit(obj):
+            try:
+                self.wfile.write((json.dumps(obj) + "\n").encode("utf-8"))
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                raise StopIteration  # client went away
+        try:
+            tr = get_translator()
+            tr.translate_stream(texts, emit)
+            log(f"stream done in {time.time() - t0:.2f}s")
+        except (BrokenPipeError, ConnectionResetError, StopIteration):
+            log("stream client disconnected")
+        except Exception as e:
+            log(f"stream FAILED: {e}")
+            try:
+                emit({"done": True, "error": str(e)})
+            except Exception:
+                pass
 
     def log_message(self, *args):
         pass  # silence default per-request stderr logging; we log our own

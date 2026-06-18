@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { buildMatchSummary, translateSummary } from '../data/matchSummary.js'
+import { buildMatchSummary, translateSummaryStream } from '../data/matchSummary.js'
 
 // Modal recap for a finished match. Shows the ORIGINAL Norwegian instantly;
 // switching to English runs the translator on demand (and caches it). Close by
@@ -21,7 +21,8 @@ export default function MatchSummary({ match, onClose }) {
     }
   }, [match?.nifsId, match?.team1, match?.team2])
 
-  // Switching to English translates lazily (once), then caches onto the data.
+  // Switching to English translates lazily (once), STREAMING the text in as it's
+  // produced, then caches it.
   async function chooseEnglish() {
     setLang('en')
     const d = state.data
@@ -29,7 +30,10 @@ export default function MatchSummary({ match, onClose }) {
     if (!(d.recapNo || d.goalsNo?.length)) return // nothing to translate
     setTranslating(true)
     try {
-      const en = await translateSummary(match, d)
+      const en = await translateSummaryStream(match, d, (partial) => {
+        // live update as tokens arrive
+        setState((s) => ({ ...s, data: { ...s.data, recap: partial.recap, goals: partial.goals } }))
+      })
       setState((s) => ({ ...s, data: { ...s.data, recap: en.recap, goals: en.goals } }))
     } catch {
       /* keep Norwegian visible if translation fails */

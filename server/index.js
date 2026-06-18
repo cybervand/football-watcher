@@ -92,6 +92,42 @@ async function handleTranslate(req, res) {
   }
 }
 
+// Stream proxy: forward the request to the translator's NDJSON streaming
+// endpoint and pipe chunks straight through so the browser sees partial
+// translations live (no buffering).
+async function handleTranslateStream(req, res) {
+  let body = ''
+  for await (const c of req) body += c
+  const t0 = Date.now()
+  logger.info('translate', `stream proxy -> ${TRANSLATOR_URL}`)
+  try {
+    const upstream = await fetch(`${TRANSLATOR_URL}/api/translate/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body || '{}',
+      signal: AbortSignal.timeout(180000),
+    })
+    res.writeHead(upstream.status, {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache',
+      'X-Accel-Buffering': 'no',
+    })
+    // Pipe the upstream web ReadableStream to the Node response, chunk by chunk.
+    const reader = upstream.body.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(Buffer.from(value))
+    }
+    res.end()
+    logger.info('translate', `stream done in ${Date.now() - t0}ms (upstream ${upstream.status})`)
+  } catch (err) {
+    logger.error('translate', `stream proxy failed after ${Date.now() - t0}ms`, err.message)
+    if (!res.headersSent) sendJson(res, 502, { error: `translator unreachable: ${err.message}` })
+    else res.end()
+  }
+}
+
 async function serveStatic(req, res) {
   // Map URL to a file in dist; fall back to index.html (SPA).
   let urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname)
@@ -128,6 +164,7 @@ const server = http.createServer((req, res) => {
       : 'debug'
     logger[lvl]('http', `${req.method} ${req.url} → ${res.statusCode} (${ms}ms) ${ip}`)
   })
+  if (req.method === 'POST' && req.url === '/api/translate/stream') return handleTranslateStream(req, res)
   if (req.method === 'POST' && req.url === '/api/translate') return handleTranslate(req, res)
   if (req.method === 'GET') return serveStatic(req, res)
   logger.warn('http', `405 ${req.method} ${req.url}`)

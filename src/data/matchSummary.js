@@ -130,6 +130,70 @@ export async function translateSummary(match, data) {
   return { recap, goals }
 }
 
+/**
+ * Like translateSummary, but STREAMS: calls onProgress({recap, goals}) as the
+ * English arrives token-by-token. Falls back to the non-streaming path if the
+ * stream endpoint isn't available. Resolves to the final {recap, goals} and
+ * caches it. texts[0] = recap, texts[1..] = goals.
+ */
+export async function translateSummaryStream(match, data, onProgress) {
+  if (data?.recap || data?.goals?.length) return { recap: data.recap, goals: data.goals }
+  const texts = [data?.recapNo || '', ...(data?.goalsNo || [])]
+  if (!texts.some(Boolean)) return { recap: null, goals: [] }
+
+  let res
+  try {
+    res = await fetch('/api/translate/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts }),
+    })
+    if (!res.ok || !res.body) throw new Error(`stream HTTP ${res.status}`)
+  } catch {
+    // No stream support — fall back to the batch translate.
+    return translateSummary(match, data)
+  }
+
+  const parts = texts.map(() => '')
+  const fromParts = () => ({
+    recap: data?.recapNo ? clean(parts[0]) || null : null,
+    goals: parts.slice(1).map(clean).filter(Boolean),
+  })
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  let final = null
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let nl
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim()
+      buf = buf.slice(nl + 1)
+      if (!line) continue
+      let evt
+      try { evt = JSON.parse(line) } catch { continue }
+      if (evt.done) {
+        if (Array.isArray(evt.translations)) {
+          evt.translations.forEach((t, i) => { parts[i] = t })
+        }
+        final = fromParts()
+      } else if (typeof evt.i === 'number') {
+        parts[evt.i] = evt.text != null ? evt.text : (evt.partial ?? parts[evt.i])
+        onProgress?.(fromParts())
+      }
+    }
+  }
+  const result = final || fromParts()
+  const key = summaryKey(match)
+  if (data?.source === 'nifs' && (result.recap || result.goals?.length)) {
+    await putCachedSummary(key, { ...data, recap: result.recap, goals: result.goals })
+  }
+  return result
+}
+
 /** Build a summary from scratch (NIFS + translation, or Wikipedia fallback). */
 async function buildSummaryFresh(match) {
   // No NIFS id (e.g. a knockout placeholder, or live data unavailable): fall
